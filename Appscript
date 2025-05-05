@@ -1,0 +1,58 @@
+function getPlaceDetailsToSheet() {
+  const apiKey = '**************************'; // Ganti dengan API Key Anda
+  const query = 'Glass & mirror shop';
+  const location = 'Bogor';
+  const limit = 40; // Jumlah maksimum tempat yang akan diproses
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(Scraping);
+  
+  // Menulis header jika diperlukan
+  sheet.appendRow(['Name', 'Address', 'Phone Number', 'Opening Hours', 'Website', 'Rating', 'Types']);
+  
+  let url = `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${query}+in+${location}&key=${apiKey}`;
+  let resultsFetched = 0; // Jumlah hasil yang sudah diambil
+  
+  while (url && resultsFetched < limit) {
+    const response = UrlFetchApp.fetch(url);
+    const data = JSON.parse(response.getContentText());
+    
+    if (data.results && data.results.length > 0) {
+      data.results.forEach(place => {
+        if (resultsFetched >= limit) return; // Stop jika sudah mencapai limit
+        
+        const placeId = place.place_id;
+        const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${apiKey}`;
+        const detailsResponse = UrlFetchApp.fetch(detailsUrl);
+        const detailsData = JSON.parse(detailsResponse.getContentText());
+        
+        if (detailsData.result) {
+          const result = detailsData.result;
+          const name = result.name || 'Not available';
+          const address = result.formatted_address || 'Not available';
+          const phoneNumber = result.formatted_phone_number || 'Not available';
+          const openingHours = result.opening_hours ? result.opening_hours.weekday_text.join(', ') : 'Not available';
+          const website = result.website || 'Not available';
+          const rating = result.rating || 'Not available';
+          const types = result.types ? result.types.map(type => type.replace('_', ' ').toUpperCase()).join(', ') : 'Not available';
+          
+          // Menulis data ke Google Sheets
+          sheet.appendRow([name, address, phoneNumber, openingHours, website, rating, types]);
+          resultsFetched++;
+        }
+      });
+      
+      // Periksa apakah ada halaman berikutnya
+      if (data.next_page_token) {
+        url = `https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=${data.next_page_token}&key=${apiKey}`;
+        
+        // Tunggu 2 detik sebelum mengambil halaman berikutnya
+        Utilities.sleep(2000);
+      } else {
+        url = null; // Tidak ada halaman berikutnya
+      }
+    } else {
+      break; // Tidak ada hasil, keluar dari loop
+    }
+  }
+  
+  Logger.log(`Proses selesai. Total tempat yang diambil: ${resultsFetched}`);
+}
